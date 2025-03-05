@@ -1,0 +1,8 @@
+.loader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 500px; /* Match the height of the map */
+  font-size: 24px;
+  color: #333;
+} 
