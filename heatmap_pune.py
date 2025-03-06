@@ -87,5 +87,5 @@ for i, cluster in enumerate(filtered_clusters):
     ).add_to(pune_map)
 
 # Save the map
-heatmap_file_path = "pune_warehouse_map.html"
+heatmap_file_path = "python.html"
 pune_map.save(heatmap_file_path)
