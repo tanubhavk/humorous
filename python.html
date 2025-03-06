@@ -1,122 +1,409 @@
-import numpy as np
-import pandas as pd  # type: ignore
-import json
-import folium
-from folium.plugins import HeatMap
-from sklearn.cluster import KMeans
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
 
-# Step 1: Generate Random Data for Pune
-np.random.seed(42)
-num_locations = 100
-latitudes = np.random.uniform(18.45, 18.65, num_locations)
-longitudes = np.random.uniform(73.75, 74.05, num_locations)
-population_density = np.random.randint(500, 5000, num_locations)
-orders = np.random.randint(50, 1000, num_locations)
-profit = orders * np.random.uniform(50, 200, num_locations)
-revenue = profit * np.random.uniform(1.2, 1.5, num_locations)
+    <script>
+      L_NO_TOUCH = false;
+      L_DISABLE_3D = false;
+    </script>
 
-# Step 2: Create a DataFrame
-data = pd.DataFrame({
-    "Latitude": latitudes,
-    "Longitude": longitudes,
-    "Population_Density": population_density,
-    "Orders": orders,
-    "Profit": profit,
-    "Revenue": revenue
-})
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+    <style>
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        left: 0;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"
+    />
 
-# Step 3: Save Data to JSON
-json_file_path = "JSON.json"
-with open(json_file_path, "w") as json_file:
-    json.dump(data.to_dict(orient="records"), json_file, indent=4)
+    <meta
+      name="viewport"
+      content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <style>
+      #map_4b79ad90e435b8edf46756715a3067bc {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        left: 0%;
+        top: 0%;
+      }
+      .leaflet-container {
+        font-size: 1rem;
+      }
+    </style>
 
-# Step 4: Apply KMeans Clustering to Identify Warehouse Locations
-features = data[["Latitude", "Longitude", "Population_Density", "Orders", "Profit", "Revenue"]]
-kmeans = KMeans(n_clusters=5, random_state=42, n_init=10)
-data["Cluster"] = kmeans.fit_predict(features)
-# Get initial warehouse locations (cluster centers)
-warehouse_locations = pd.DataFrame(kmeans.cluster_centers_, columns=features.columns)[["Latitude", "Longitude"]]
+    <script src="https://cdn.jsdelivr.net/gh/python-visualization/folium@main/folium/templates/leaflet_heat.min.js"></script>
+  </head>
+  <body>
+    <div
+      style="
+        position: fixed;
+        bottom: 50px;
+        left: 50px;
+        width: 200px;
+        height: 90px;
+        background-color: white;
+        z-index: 9999;
+        font-size: 14px;
+        padding: 10px;
+        border-radius: 5px;
+      "
+    >
+      <b>Heatmap Intensity</b><br />
+      <i
+        style="
+          background: red;
+          width: 10px;
+          height: 10px;
+          display: inline-block;
+        "
+      ></i>
+      High<br />
+      <i
+        style="
+          background: yellow;
+          width: 10px;
+          height: 10px;
+          display: inline-block;
+        "
+      ></i>
+      Medium<br />
+      <i
+        style="
+          background: green;
+          width: 10px;
+          height: 10px;
+          display: inline-block;
+        "
+      ></i>
+      Low
+    </div>
 
-# Function to filter warehouse locations so they are not too close
-def filter_close_locations(warehouse_df, min_distance=0.01):
-    filtered = []
-    for idx, row in warehouse_df.iterrows():
-        lat, lon = row['Latitude'], row['Longitude']
-        too_close = False
-        for loc in filtered:
-            # Calculate Euclidean distance in lat-long space (approximate)
-            dist = np.sqrt((lat - loc['Latitude'])**2 + (lon - loc['Longitude'])**2)
-            if dist < min_distance:
-                too_close = True
-                break
-        if not too_close:
-            filtered.append({'Latitude': lat, 'Longitude': lon})
-    return pd.DataFrame(filtered)
+    <div class="folium-map" id="map_4b79ad90e435b8edf46756715a3067bc"></div>
+  </body>
+  <script>
+    var map_4b79ad90e435b8edf46756715a3067bc = L.map(
+      "map_4b79ad90e435b8edf46756715a3067bc",
+      {
+        center: [18.5204, 73.8567],
+        crs: L.CRS.EPSG3857,
+        ...{
+          zoom: 12,
+          zoomControl: true,
+          preferCanvas: false,
+        },
+      }
+    );
 
-# Step 4.1: Filter warehouse locations to ensure they are not near each other
-warehouse_locations = filter_close_locations(warehouse_locations, min_distance=0.01)
+    var tile_layer_ac111c8e886c0baa5469cfd781cc4eb5 = L.tileLayer(
+      "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        minZoom: 0,
+        maxZoom: 19,
+        maxNativeZoom: 19,
+        noWrap: false,
+        attribution:
+          '\u0026copy; \u003ca href="https://www.openstreetmap.org/copyright"\u003eOpenStreetMap\u003c/a\u003e contributors',
+        subdomains: "abc",
+        detectRetina: false,
+        tms: false,
+        opacity: 1,
+      }
+    );
 
-# Step 5: Save Warehouse Locations to JSON
-warehouse_json_file_path = "JSON_2.json"
-with open(warehouse_json_file_path, "w") as json_file:
-    json.dump(warehouse_locations.to_dict(orient="records"), json_file, indent=4)
+    tile_layer_ac111c8e886c0baa5469cfd781cc4eb5.addTo(
+      map_4b79ad90e435b8edf46756715a3067bc
+    );
 
-# Step 6: Create Pune Heatmap
-pune_map = folium.Map(location=[18.5204, 73.8567], zoom_start=12)
+    var heat_map_90f6907579cf70f921813032e761b7a9 = L.heatLayer(
+      [
+        [18.52490802376947, 73.75942875570603, 0.4576270212347153],
+        [18.640142861281983, 73.94092312337914, 0.373583987720145],
+        [18.59639878836228, 73.8443067943229, 0.17231889925514812],
+        [18.569731696839405, 73.90257120734941, 0.13046969192759014],
+        [18.481203728088488, 74.02226994217783, 0.043861319501787135],
+        [18.481198904067238, 73.82478766874466, 0.1795809225225094],
+        [18.46161672243364, 73.87311487691069, 0.4530231408932358],
+        [18.623235229154986, 73.9766653415629, 0.2605873197860207],
+        [18.57022300234864, 73.81863944964749, 0.32419099284094355],
+        [18.591614515559208, 73.77309397294864, 0.5903742339618384],
+        [18.45411689885916, 73.83692543587414, 0.2996593961220182],
+        [18.643981970432396, 73.7983663861762, 0.2707028390009003],
+        [18.616488528160083, 74.02890929570277, 0.6667633643932431],
+        [18.492467822135655, 73.99243611386932, 0.0032624527263477687],
+        [18.48636499344142, 73.94002112695313, 0.35884203779193685],
+        [18.486680901970686, 74.01143817705632, 0.6528868202081262],
+        [18.510848448591908, 73.99110162306974, 0.19691945850667722],
+        [18.554951286326446, 73.80597101766581, 0.03743529898267888],
+        [18.536389003728424, 74.017767699547, 0.4894542557276389],
+        [18.50824582803961, 73.9118026725747, 0.44440056559365787],
+        [18.572370578944476, 73.99223204654922, 0.008625694038477806],
+        [18.47789877213041, 74.01882738997705, 0.15185453596867785],
+        [18.508428929707044, 73.84540104249156, 0.11642269885410629],
+        [18.523272368658738, 73.7830155773583, 0.8482587350632913],
+        [18.541213996843407, 73.81838054876258, 1.0],
+        [18.6070351922786, 73.87813233658788, 0.3810905808675377],
+        [18.489934756431673, 73.99540442977674, 0.11856259000493907],
+        [18.552846887682723, 74.0082191749769, 0.0],
+        [18.568482913772407, 73.75208563915936, 0.26797974888693354],
+        [18.459290082543998, 73.90322419077327, 0.267574056873223],
+        [18.571508970380286, 73.87522330094463, 0.8631209266836335],
+        [18.484104824737457, 73.81663234314122, 0.27745790640420837],
+        [18.463010318597057, 73.78595961020011, 0.38174953613537876],
+        [18.639777107450666, 73.85128455142109, 0.2733247428580393],
+        [18.64312640661491, 74.03287291117375, 0.10415143996345215],
+        [18.61167946962329, 73.84696087960623, 0.672308896246166],
+        [18.510922753834674, 73.90563718652301, 0.04813845943279714],
+        [18.469534422801274, 73.96090568766856, 0.25628795426724116],
+        [18.58684660530243, 73.85908888071378, 0.601809349912316],
+        [18.53803049874792, 74.04153462481628, 0.5490445826101286],
+        [18.474407646968956, 74.03873418848264, 0.13993677821183254],
+        [18.549035382022254, 73.82553468874761, 0.7757620522611068],
+        [18.456877704223043, 73.89917455176771, 0.8203507207508857],
+        [18.631864080415756, 73.84026349294503, 0.2951999043739761],
+        [18.501755996320004, 73.83545214831324, 0.012351675315158045],
+        [18.582504456870794, 73.76106608420636, 0.36049140741005636],
+        [18.51234221521788, 73.93286930019397, 0.7762152243204529],
+        [18.55401360423556, 73.90080370696866, 0.551991611558816],
+        [18.559342055868655, 73.765443625375, 0.07859933461066204],
+        [18.486970891105106, 73.83359393927098, 0.4888779242878846],
+        [18.64391692555291, 74.02247976579, 0.7254266772243819],
+        [18.605026564672222, 73.82186856720008, 0.07919865895080291],
+        [18.637899788312836, 73.79346846162737, 0.4313188166819172],
+        [18.62896547008553, 73.89683582808327, 0.9544062324575747],
+        [18.569579995762215, 74.04569513623318, 0.38967091164419004],
+        [18.634374847004622, 73.82261658145345, 0.07182457669849586],
+        [18.467698500410382, 73.95164066422176, 0.6347253834536751],
+        [18.489196572483827, 73.97848588459861, 0.18646487440009432],
+        [18.459045457782107, 73.82129126319772, 0.8109073854313482],
+        [18.515066066152652, 73.96846490458356, 0.5667143316779762],
+        [18.527735457937894, 73.86033493981577, 0.11606272654416863],
+        [18.504269806354777, 73.93969174917807, 0.3667818908974793],
+        [18.615747501830384, 73.94005891322827, 0.1422984036167374],
+        [18.521350665338716, 73.91073240522243, 0.3580554488101564],
+        [18.506186901937475, 73.77708693101633, 0.1702032446404445],
+        [18.558539216631647, 74.00059074867677, 0.5674209476363774],
+        [18.478184844994953, 73.84623401949152, 0.07202898387361023],
+        [18.610439396150806, 73.80595555311996, 0.49714455601643454],
+        [18.464910128735955, 73.76223254246644, 0.9940777722646505],
+        [18.647377387320102, 73.92726788295647, 0.3466011511754095],
+        [18.60444895385933, 73.95326930855268, 0.16979219496199074],
+        [18.489743136306835, 73.75497634867835, 0.5561792779596648],
+        [18.45110442342472, 73.90362791748979, 0.2795840632655736],
+        [18.613092285690964, 73.81794873255939, 0.305319360247856],
+        [18.591371468769523, 73.94355183712284, 0.4558280101626246],
+        [18.595801433608194, 73.80230992870149, 0.7991260992342561],
+        [18.604254069337188, 73.95728132143074, 0.22933589326651044],
+        [18.464808930346816, 73.86602060389016, 0.09872953257417537],
+        [18.521693145708852, 74.03101899662101, 0.15683396644154243],
+        [18.473173811905024, 73.7912562832438, 0.24583947456117294],
+        [18.622620685175118, 73.85231990531507, 0.3346957022815525],
+        [18.57465962536551, 73.78404205637217, 0.0203445807511859],
+        [18.516179604970528, 74.02740808548357, 0.5234094899855802],
+        [18.462711670057203, 74.0132018060143, 0.1877971416481348],
+        [18.51219646434313, 73.82738248831454, 0.243114942733097],
+        [18.515036664405347, 73.94799521381024, 0.02994719543935567],
+        [18.59592123566761, 73.99516666006036, 0.012423324976627553],
+        [18.577511494271043, 73.91656024347984, 0.03852132344200271],
+        [18.627442548515265, 73.9088951735068, 0.7691096939436755],
+        [18.54444298503239, 73.82255568727014, 0.40374529485548327],
+        [18.47391884918766, 73.77793083034177, 0.07165881913060823],
+        [18.5926489574446, 74.019164727386, 0.3342638087381624],
+        [18.602157009723378, 74.020125417149, 0.22102223954893266],
+        [18.562255439513898, 73.93993043718199, 0.15643840454671973],
+        [18.60419343599091, 73.85170893731461, 0.42454830177913666],
+        [18.548759119272876, 73.8547628723838, 0.31578569823910024],
+        [18.554546565876397, 73.96778670366108, 0.17320353768723556],
+        [18.535508203671707, 74.01913307798577, 0.21628453072910928],
+        [18.45508382534882, 74.01612592727953, 0.36232480803065636],
+        [18.47157828539866, 73.98396266375728, 0.15299761041564164],
+      ],
+      {
+        minOpacity: 0.5,
+        maxZoom: 18,
+        radius: 15,
+        blur: 10,
+      }
+    );
 
-# Compute Weighted Score for Heatmap Intensity
-data["Weighted_Score"] = (
-    data["Population_Density"] * 0.3 +
-    data["Orders"] * 0.3 +
-    data["Profit"] * 0.2 +
-    data["Revenue"] * 0.2
-)
-data["Weighted_Score"] = (data["Weighted_Score"] - data["Weighted_Score"].min()) / (data["Weighted_Score"].max() - data["Weighted_Score"].min())
+    heat_map_90f6907579cf70f921813032e761b7a9.addTo(
+      map_4b79ad90e435b8edf46756715a3067bc
+    );
 
-heat_data = data[["Latitude", "Longitude", "Weighted_Score"]].values.tolist()
-HeatMap(heat_data, radius=15, blur=10).add_to(pune_map)
+    var marker_2de6b00a4ffdde75884a91a92b04d3d8 = L.marker(
+      [18.536706507517888, 73.91859976598892],
+      {}
+    ).addTo(map_4b79ad90e435b8edf46756715a3067bc);
 
-# Step 7: Add Legend for Intensity Scale
-legend_html = '''
-<div style="position: fixed; bottom: 50px; left: 50px; width: 200px; height: 90px; background-color: white; z-index:9999; font-size:14px; padding:10px; border-radius:5px;">
-    <b>Heatmap Intensity</b><br>
-    <i style="background: red; width: 10px; height: 10px; display: inline-block;"></i> High<br>
-    <i style="background: yellow; width: 10px; height: 10px; display: inline-block;"></i> Medium<br>
-    <i style="background: green; width: 10px; height: 10px; display: inline-block;"></i> Low
-</div>
-'''
-pune_map.get_root().html.add_child(folium.Element(legend_html))
+    var icon_ec2a2b4388ee12eaa7fcf5c4da8be6ec = L.AwesomeMarkers.icon({
+      markerColor: "red",
+      iconColor: "white",
+      icon: "home",
+      prefix: "glyphicon",
+      extraClasses: "fa-rotate-0",
+    });
 
-# Step 8: Add Warehouse Locations with Informative Descriptions
-for _, row in warehouse_locations.iterrows():
-    # Find if any nearby data point exists (for additional reasoning, if needed)
-    nearby_data = data[(data["Latitude"] == row["Latitude"]) & (data["Longitude"] == row["Longitude"])]
-    reasoning = "This warehouse is strategically placed based on high demand, population density, and profitability."
-    if not nearby_data.empty:
-        reasoning += " An existing warehouse is in close proximity; further analysis is needed to optimize efficiency."
-    
-    folium.Marker(
-        location=[row["Latitude"], row["Longitude"]],
-        popup=(
-            f"<b>Proposed Warehouse Location</b><br>"
-            f"Reasoning: {reasoning}<br>"
-            f"Alternative locations had lower demand or lower profitability."
-        ),
-        icon=folium.Icon(color="red", icon="home")
-    ).add_to(pune_map)
+    var popup_8f8cb7bebf8f609ca3f7988a24a4c83d = L.popup({
+      maxWidth: "100%",
+    });
 
-# Step 9: Add a popup that appears on page load using custom JavaScript
-popup_script = """
-<script>
-    window.onload = function() {
-        alert("The heatmaps are the end data generated after taking into consideration the different parameters, and after that we have selected some places to setup the dark stores in.");
-    }
-</script>
-"""
-pune_map.get_root().html.add_child(folium.Element(popup_script))
+    var html_c5dc1add1d5ab3f89fe4cf0e4dccf6a8 = $(
+      `<div id="html_c5dc1add1d5ab3f89fe4cf0e4dccf6a8" style="width: 100.0%; height: 100.0%;"><b>Proposed Warehouse Location</b><br>Reasoning: This warehouse is strategically placed based on high demand, population density, and profitability.<br>Alternative locations had lower demand or lower profitability.</div>`
+    )[0];
+    popup_8f8cb7bebf8f609ca3f7988a24a4c83d.setContent(
+      html_c5dc1add1d5ab3f89fe4cf0e4dccf6a8
+    );
 
-# Step 10: Save and Display Map
-heatmap_file_path = "pune_heatmap.html"
-pune_map.save(heatmap_file_path)
+    marker_2de6b00a4ffdde75884a91a92b04d3d8.bindPopup(
+      popup_8f8cb7bebf8f609ca3f7988a24a4c83d
+    );
 
-print(f"Heatmap saved as {heatmap_file_path}. Open this file in a browser to view the map.")
+    marker_2de6b00a4ffdde75884a91a92b04d3d8.setIcon(
+      icon_ec2a2b4388ee12eaa7fcf5c4da8be6ec
+    );
+
+    var marker_2e0cda73d70ba55edaa381eb3cc22cbc = L.marker(
+      [18.547861050135463, 73.86235353912672],
+      {}
+    ).addTo(map_4b79ad90e435b8edf46756715a3067bc);
+
+    var icon_5c8eb0c2ff3057f8881d58acec1f7801 = L.AwesomeMarkers.icon({
+      markerColor: "red",
+      iconColor: "white",
+      icon: "home",
+      prefix: "glyphicon",
+      extraClasses: "fa-rotate-0",
+    });
+
+    var popup_710125e426455077884a166e880f9c5a = L.popup({
+      maxWidth: "100%",
+    });
+
+    var html_e7fff881e85bca17c8fb60dc2e78814b = $(
+      `<div id="html_e7fff881e85bca17c8fb60dc2e78814b" style="width: 100.0%; height: 100.0%;"><b>Proposed Warehouse Location</b><br>Reasoning: This warehouse is strategically placed based on high demand, population density, and profitability.<br>Alternative locations had lower demand or lower profitability.</div>`
+    )[0];
+    popup_710125e426455077884a166e880f9c5a.setContent(
+      html_e7fff881e85bca17c8fb60dc2e78814b
+    );
+
+    marker_2e0cda73d70ba55edaa381eb3cc22cbc.bindPopup(
+      popup_710125e426455077884a166e880f9c5a
+    );
+
+    marker_2e0cda73d70ba55edaa381eb3cc22cbc.setIcon(
+      icon_5c8eb0c2ff3057f8881d58acec1f7801
+    );
+
+    var marker_a5ccdfc03b3dbd9c9e6eaf39883ac91a = L.marker(
+      [18.5401937005749, 73.89739457100714],
+      {}
+    ).addTo(map_4b79ad90e435b8edf46756715a3067bc);
+
+    var icon_a60141cbd13a012c91a84a7fcf675c8b = L.AwesomeMarkers.icon({
+      markerColor: "red",
+      iconColor: "white",
+      icon: "home",
+      prefix: "glyphicon",
+      extraClasses: "fa-rotate-0",
+    });
+
+    var popup_13289205861f5b1d3c786c632ae0e790 = L.popup({
+      maxWidth: "100%",
+    });
+
+    var html_561d29327fdec7a11b6fe6fbfd6d6f5b = $(
+      `<div id="html_561d29327fdec7a11b6fe6fbfd6d6f5b" style="width: 100.0%; height: 100.0%;"><b>Proposed Warehouse Location</b><br>Reasoning: This warehouse is strategically placed based on high demand, population density, and profitability.<br>Alternative locations had lower demand or lower profitability.</div>`
+    )[0];
+    popup_13289205861f5b1d3c786c632ae0e790.setContent(
+      html_561d29327fdec7a11b6fe6fbfd6d6f5b
+    );
+
+    marker_a5ccdfc03b3dbd9c9e6eaf39883ac91a.bindPopup(
+      popup_13289205861f5b1d3c786c632ae0e790
+    );
+
+    marker_a5ccdfc03b3dbd9c9e6eaf39883ac91a.setIcon(
+      icon_a60141cbd13a012c91a84a7fcf675c8b
+    );
+
+    var marker_736274933875c32dfb07647562941d86 = L.marker(
+      [18.554385161031924, 73.88265251016907],
+      {}
+    ).addTo(map_4b79ad90e435b8edf46756715a3067bc);
+
+    var icon_e3c316511306f61ce32d4f04746c2ccc = L.AwesomeMarkers.icon({
+      markerColor: "red",
+      iconColor: "white",
+      icon: "home",
+      prefix: "glyphicon",
+      extraClasses: "fa-rotate-0",
+    });
+
+    var popup_b35de68495319297202e15555b0815e4 = L.popup({
+      maxWidth: "100%",
+    });
+
+    var html_3d301a4074f2d2ac444df3bc861326e0 = $(
+      `<div id="html_3d301a4074f2d2ac444df3bc861326e0" style="width: 100.0%; height: 100.0%;"><b>Proposed Warehouse Location</b><br>Reasoning: This warehouse is strategically placed based on high demand, population density, and profitability.<br>Alternative locations had lower demand or lower profitability.</div>`
+    )[0];
+    popup_b35de68495319297202e15555b0815e4.setContent(
+      html_3d301a4074f2d2ac444df3bc861326e0
+    );
+
+    marker_736274933875c32dfb07647562941d86.bindPopup(
+      popup_b35de68495319297202e15555b0815e4
+    );
+
+    marker_736274933875c32dfb07647562941d86.setIcon(
+      icon_e3c316511306f61ce32d4f04746c2ccc
+    );
+  </script>
+  <script>
+    window.onload = function () {
+      const msg =
+        "The heatmaps represent the final data generated after considering various parameters. Based on this analysis, specific locations have been identified for the setup of dark stores. These selected locations are clearly indicated by red markers on the map.";
+      setTimeout(() => alert(msg), 2000);
+    };
+  </script>
+</html>
