@@ -1,19 +1,25 @@
 import numpy as np
 import pandas as pd
-import json
 import folium
 from folium.plugins import HeatMap
 from sklearn.cluster import KMeans
+from geopy.distance import geodesic
 
+# Set random seed for reproducibility
 np.random.seed(42)
 num_locations = 100
+
+# Generate random locations within Pune's geographical bounds
 latitudes = np.random.uniform(18.45, 18.65, num_locations)
 longitudes = np.random.uniform(73.75, 74.05, num_locations)
+
+# Generate data for population density, orders, profit, and revenue
 population_density = np.random.randint(500, 5000, num_locations)
 orders = np.random.randint(50, 1000, num_locations)
 profit = orders * np.random.uniform(50, 200, num_locations)
 revenue = profit * np.random.uniform(1.2, 1.5, num_locations)
 
+# Store data in a DataFrame
 data = pd.DataFrame({
     "Latitude": latitudes,
     "Longitude": longitudes,
@@ -23,63 +29,63 @@ data = pd.DataFrame({
     "Revenue": revenue
 })
 
-json_file_path = "JSON.json"
-with open(json_file_path, "w") as json_file:
-    json.dump(data.to_dict(orient="records"), json_file, indent=4)
-
-features = data[["Latitude", "Longitude", "Population_Density", "Orders", "Profit", "Revenue"]]
-kmeans = KMeans(n_clusters=5, random_state=42, n_init=10)
-data["Cluster"] = kmeans.fit_predict(features)
-warehouse_locations = pd.DataFrame(kmeans.cluster_centers_, columns=features.columns)[["Latitude", "Longitude"]]
-
-warehouse_json_file_path = "JSON_2.json"
-with open(warehouse_json_file_path, "w") as json_file:
-    json.dump(warehouse_locations.to_dict(orient="records"), json_file, indent=4)
-
-pune_map = folium.Map(location=[18.5204, 73.8567], zoom_start=12)
-
+# Compute weighted score considering multiple factors
 data["Weighted_Score"] = (
     data["Population_Density"] * 0.3 +
     data["Orders"] * 0.3 +
     data["Profit"] * 0.2 +
     data["Revenue"] * 0.2
 )
-data["Weighted_Score"] = (data["Weighted_Score"] - data["Weighted_Score"].min()) / (data["Weighted_Score"].max() - data["Weighted_Score"].min())
 
+# Normalize the weighted scores
+data["Weighted_Score"] = (
+    (data["Weighted_Score"] - data["Weighted_Score"].min()) /
+    (data["Weighted_Score"].max() - data["Weighted_Score"].min())
+)
+
+# List of existing warehouse locations (example coordinates)
+existing_warehouses = [(18.5204, 73.8567), (18.5310, 73.8745)]  # Add your existing warehouse locations here
+
+# Function to check if a new location is too close to existing warehouses
+def is_too_close(new_location, existing_locations, min_distance_km=5):
+    for existing_location in existing_locations:
+        if geodesic(new_location, existing_location).km < min_distance_km:
+            return True
+    return False
+
+# Determine optimal warehouse locations using KMeans clustering
+kmeans = KMeans(n_clusters=5, random_state=42, n_init=10)
+kmeans.fit(data[["Latitude", "Longitude", "Weighted_Score"]])
+warehouse_clusters = kmeans.cluster_centers_
+
+# Filter out clusters that are too close to existing warehouses
+filtered_clusters = []
+for cluster in warehouse_clusters:
+    latitude, longitude, _ = cluster
+    if not is_too_close((latitude, longitude), existing_warehouses):
+        filtered_clusters.append(cluster)
+
+# Create a map of Pune
+pune_map = folium.Map(location=[18.5204, 73.8567], zoom_start=12)
+
+# Prepare heatmap data
 heat_data = data[["Latitude", "Longitude", "Weighted_Score"]].values.tolist()
 HeatMap(heat_data, radius=15, blur=10).add_to(pune_map)
 
-# Add a legend for intensity scale
-legend_html = '''
-<div style="position: fixed; bottom: 50px; left: 50px; width: 200px; height: 90px; background-color: white; z-index:9999; font-size:14px; padding:10px; border-radius:5px;">
-    <b>Heatmap Intensity</b><br>
-    <i style="background: red; width: 10px; height: 10px; display: inline-block;"></i> High<br>
-    <i style="background: yellow; width: 10px; height: 10px; display: inline-block;"></i> Medium<br>
-    <i style="background: green; width: 10px; height: 10px; display: inline-block;"></i> Low<br>
-    <b>Ranges:</b><br>
-    Population Density: 500-5000<br>
-    Orders: 50-1000<br>
-    Profit: 2500-200000<br>
-    Revenue: 3000-300000
-</div>
-'''
-pune_map.get_root().html.add_child(folium.Element(legend_html))
-
-for _, row in warehouse_locations.iterrows():
-    existing_warehouse = data[(data["Latitude"] == row["Latitude"]) & (data["Longitude"] == row["Longitude"])]
-    reasoning = "This location is chosen due to high population density and order volume."
-    if not existing_warehouse.empty:
-        reasoning += " However, there is already a warehouse here, which may require optimization."
+# Add warehouse locations to the map
+for i, cluster in enumerate(filtered_clusters):
+    latitude, longitude, _ = cluster
     folium.Marker(
-        location=[row["Latitude"], row["Longitude"]],
+        location=[latitude, longitude],
         popup=(
-            f"Warehouse Location\n"
-            f"Reason for selection: {reasoning}\n"
-            f"Why not other sites? Lower density or profit\n"
-            f"Existing warehouse impact? {reasoning}"
+            f"Warehouse Location {i+1}\n"
+            f"Latitude: {latitude}\n"
+            f"Longitude: {longitude}\n"
+            "Reasoning: This location was selected based on the highest weighted score, considering population density, orders, profit, and revenue."
         ),
-        icon=folium.Icon(color="red", icon="home")
+        icon=folium.Icon(color="blue", icon="home")
     ).add_to(pune_map)
 
-heatmap_file_path = "index.html"
+# Save the map
+heatmap_file_path = "pune_warehouse_map.html"
 pune_map.save(heatmap_file_path)
